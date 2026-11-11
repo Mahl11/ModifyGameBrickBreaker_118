@@ -166,11 +166,29 @@ class Game(tk.Frame):
         self.canvas.bind('<A>', lambda _: self.paddle.move(-14))
         self.canvas.bind('<D>', lambda _: self.paddle.move(14))
 
-        # Modifikasi Kontrol: Tombol Pause [P] dan Quick Restart [R]
+        # Modifikasi Kontrol: Tombol Pause [P], Quick Restart [R], dan Screenshot [F12]
         self.canvas.bind('<p>', lambda _: self.toggle_pause())
         self.canvas.bind('<P>', lambda _: self.toggle_pause())
         self.canvas.bind('<r>', lambda _: self.restart_game())
         self.canvas.bind('<R>', lambda _: self.restart_game())
+        self.canvas.bind('<F12>', lambda _: self.capture_screenshot())
+
+    def capture_screenshot(self):
+        """Menyimpan tangkapan layar tampilan game langsung ke folder screenshots/."""
+        try:
+            import os
+            from PIL import ImageGrab
+            os.makedirs('screenshots', exist_ok=True)
+            self.master.update()
+            x = self.master.winfo_rootx()
+            y = self.master.winfo_rooty()
+            w = self.master.winfo_width()
+            h = self.master.winfo_height()
+            img = ImageGrab.grab(bbox=(x, y, x + w, y + h))
+            img.save('screenshots/tampilan_modifikasi.png')
+            print("Screenshot berhasil disimpan ke screenshots/tampilan_modifikasi.png")
+        except Exception as e:
+            print(f"Gagal mengambil screenshot: {e}")
 
     def load_level(self, level):
         """Membuat susunan bata berdasarkan tingkat level (Level 1 atau Level 2)."""
