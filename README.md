@@ -11,7 +11,9 @@
 
 ## 📸 Tampilan Aplikasi
 
-*(Screenshot menyusul — ambil sendiri dari tampilan game yang sudah berjalan)*
+<img width="604" height="454" alt="image" src="https://github.com/user-attachments/assets/7b92b25a-b66c-4c16-b597-ddf75ffe98ca" />
+
+<img width="1535" height="950" alt="image" src="https://github.com/user-attachments/assets/d73329b9-39bf-4422-a8c5-3323a02b26be" />
 
 ---
 
