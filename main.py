@@ -2,6 +2,7 @@ import tkinter as tk
 
 
 class GameObject(object):
+    """Kelas dasar untuk seluruh objek visual di dalam game (OOP Base Class)."""
     def __init__(self, canvas, item):
         self.canvas = canvas
         self.item = item
@@ -17,10 +18,12 @@ class GameObject(object):
 
 
 class Ball(GameObject):
-    def __init__(self, canvas, x, y):
+    """Objek bola yang memantul dan mendeteksi tabrakan (Inheritance dari GameObject)."""
+    def __init__(self, canvas, x, y, speed=10):
         self.radius = 10
         self.direction = [1, -1]
-        self.speed = 10
+        self.speed = speed
+        # Modifikasi Visual: Bola glowing emas dengan outline oranye arcade
         item = canvas.create_oval(x - self.radius, y - self.radius,
                                   x + self.radius, y + self.radius,
                                   fill='#feca57', outline='#ff9f43', width=2)
@@ -29,10 +32,11 @@ class Ball(GameObject):
     def update(self):
         coords = self.get_position()
         width = self.canvas.winfo_width()
+        # Pantulan dinding samping (kiri dan kanan)
         if coords[0] <= 0 or coords[2] >= width:
             self.direction[0] *= -1
-        # Batasi pantulan atas di bawah garis HUD (y >= 42)
-        if coords[1] <= 42:
+        # Pantulan dinding atas di bawah garis HUD (y >= 44)
+        if coords[1] <= 44:
             self.direction[1] *= -1
         x = self.direction[0] * self.speed
         y = self.direction[1] * self.speed
@@ -53,6 +57,7 @@ class Ball(GameObject):
             else:
                 self.direction[1] *= -1
 
+        # Modifikasi OOP: Mengumpulkan skor dari setiap bata yang tertabrak
         points_earned = 0
         for game_object in game_objects:
             if isinstance(game_object, Brick):
@@ -61,10 +66,12 @@ class Ball(GameObject):
 
 
 class Paddle(GameObject):
+    """Objek raket pemain yang dapat digerakkan ke kiri dan kanan."""
     def __init__(self, canvas, x, y):
-        self.width = 90
+        self.width = 95
         self.height = 12
         self.ball = None
+        # Modifikasi Visual: Paddle modern neon cyan dengan border rapi
         item = canvas.create_rectangle(x - self.width / 2,
                                        y - self.height / 2,
                                        x + self.width / 2,
@@ -85,6 +92,7 @@ class Paddle(GameObject):
 
 
 class Brick(GameObject):
+    """Objek bata sasaran dengan variasi ketahanan & poin per level hit."""
     COLORS = {1: '#ff6b6b', 2: '#48dbfb', 3: '#1dd1a1'}
 
     def __init__(self, canvas, x, y, hits):
@@ -101,23 +109,26 @@ class Brick(GameObject):
         super(Brick, self).__init__(canvas, item)
 
     def hit(self):
-        # Modifikasi Scoring: Poin diperoleh berdasarkan hit atau hancur total
         self.hits -= 1
         if self.hits == 0:
             self.delete()
             return 25  # Bonus 25 poin saat bata hancur total
         else:
-            self.canvas.itemconfig(self.item,
-                                   fill=Brick.COLORS[self.hits])
-            return 10  # 10 poin saat terkena pantulan pertama
+            self.canvas.itemconfig(self.item, fill=Brick.COLORS[self.hits])
+            return 10  # 10 poin saat memukul lapisan bata
 
 
 class Game(tk.Frame):
+    """Controller utama game yang mengatur siklus hidup, HUD, kontrol, dan level."""
     def __init__(self, master):
         super(Game, self).__init__(master)
         self.lives = 3
         self.score = 0
         self.high_score = 0
+        self.level = 1
+        self.is_running = False
+        self.paused = False
+
         self.width = 610
         self.height = 430
         self.canvas = tk.Canvas(self, bg='#1a1a2e',
@@ -127,33 +138,75 @@ class Game(tk.Frame):
         self.canvas.pack()
         self.pack()
 
-        # Garis pembatas HUD atas
-        self.canvas.create_line(0, 42, self.width, 42, fill='#30336b', width=1.5)
+        # Garis batas pembagi HUD di atas arena game
+        self.canvas.create_line(0, 44, self.width, 44, fill='#30336b', width=1.5)
 
         self.items = {}
         self.ball = None
-        self.paddle = Paddle(self.canvas, self.width / 2, 370)
+        self.paddle = Paddle(self.canvas, self.width / 2, 375)
         self.items[self.paddle.item] = self.paddle
-        for x in range(5, self.width - 5, 75):
-            self.add_brick(x + 37.5, 70, 2)
-            self.add_brick(x + 37.5, 95, 1)
-            self.add_brick(x + 37.5, 120, 1)
 
-        self.score_hud = None
-        self.high_score_hud = None
-        self.lives_hud = None
+        self.text = None
+        self.subtext = None
+        self.pause_text = None
+        self.pause_sub = None
+        self.hud_score = None
+        self.hud_level = None
+        self.hud_lives = None
+
+        self.load_level(self.level)
         self.setup_game()
         self.canvas.focus_set()
-        self.canvas.bind('<Left>',
-                         lambda _: self.paddle.move(-12))
-        self.canvas.bind('<Right>',
-                         lambda _: self.paddle.move(12))
+
+        # Modifikasi Kontrol: Dukungan kontrol panah keyboard dan tombol A / D
+        self.canvas.bind('<Left>', lambda _: self.paddle.move(-14))
+        self.canvas.bind('<Right>', lambda _: self.paddle.move(14))
+        self.canvas.bind('<a>', lambda _: self.paddle.move(-14))
+        self.canvas.bind('<d>', lambda _: self.paddle.move(14))
+        self.canvas.bind('<A>', lambda _: self.paddle.move(-14))
+        self.canvas.bind('<D>', lambda _: self.paddle.move(14))
+
+        # Modifikasi Kontrol: Tombol Pause [P] dan Quick Restart [R]
+        self.canvas.bind('<p>', lambda _: self.toggle_pause())
+        self.canvas.bind('<P>', lambda _: self.toggle_pause())
+        self.canvas.bind('<r>', lambda _: self.restart_game())
+        self.canvas.bind('<R>', lambda _: self.restart_game())
+
+    def load_level(self, level):
+        """Membuat susunan bata berdasarkan tingkat level (Level 1 atau Level 2)."""
+        # Hapus sisa bata lama jika ada
+        for item_id in list(self.items.keys()):
+            if isinstance(self.items[item_id], Brick):
+                self.items[item_id].delete()
+                del self.items[item_id]
+
+        if level == 1:
+            for x in range(5, self.width - 5, 75):
+                self.add_brick(x + 37.5, 70, 2)
+                self.add_brick(x + 37.5, 95, 1)
+                self.add_brick(x + 37.5, 120, 1)
+        elif level == 2:
+            # Level 2: Formasi 4 baris bata lebih tebal dengan variasi Emerald Hit 3
+            for x in range(5, self.width - 5, 75):
+                self.add_brick(x + 37.5, 65, 3)
+                self.add_brick(x + 37.5, 88, 2)
+                self.add_brick(x + 37.5, 111, 2)
+                self.add_brick(x + 37.5, 134, 1)
 
     def setup_game(self):
+        """Menyiapkan posisi bola di atas paddle dan instruksi mulai."""
         self.add_ball()
         self.update_hud()
-        self.text = self.draw_text(self.width / 2, 230,
+        if self.text:
+            self.canvas.delete(self.text)
+        if self.subtext:
+            self.canvas.delete(self.subtext)
+
+        self.text = self.draw_text(self.width / 2, 220,
                                    'Press SPACE to Start', size='22', fill='#ffffff')
+        self.subtext = self.draw_text(self.width / 2, 255,
+                                      'Controls: [A/D] or [<-/->] Move | [P] Pause | [R] Restart',
+                                      size='11', fill='#8395a7')
         self.canvas.bind('<space>', lambda _: self.start_game())
 
     def add_ball(self):
@@ -161,14 +214,15 @@ class Game(tk.Frame):
             self.ball.delete()
         paddle_coords = self.paddle.get_position()
         x = (paddle_coords[0] + paddle_coords[2]) * 0.5
-        self.ball = Ball(self.canvas, x, 352)
+        speed = 10 if self.level == 1 else 12
+        self.ball = Ball(self.canvas, x, 355, speed=speed)
         self.paddle.set_ball(self.ball)
 
     def add_brick(self, x, y, hits):
         brick = Brick(self.canvas, x, y, hits)
         self.items[brick.item] = brick
 
-    def draw_text(self, x, y, text, size='30', fill='#ffffff'):
+    def draw_text(self, x, y, text, size='24', fill='#ffffff'):
         font = ('Segoe UI', size, 'bold')
         return self.canvas.create_text(x, y, text=text,
                                        font=font, fill=fill)
@@ -180,49 +234,119 @@ class Game(tk.Frame):
         self.update_hud()
 
     def update_hud(self):
-        # Modifikasi HUD: Skor, High Score, dan Nyawa Simbol Hati (Heart Icons)
-        score_text = f'SCORE: {self.score}'
-        high_text = f'HIGH: {self.high_score}'
+        """Menampilkan status skor, level, dan nyawa dalam simbol hati."""
+        score_text = f'SCORE: {self.score}  (HIGH: {self.high_score})'
+        level_text = f'LEVEL: {self.level}'
         hearts = '❤️ ' * max(0, self.lives) if self.lives > 0 else '💔 GAME OVER'
 
-        if self.score_hud is None:
-            self.score_hud = self.canvas.create_text(
-                65, 21, text=score_text,
-                font=('Segoe UI', 12, 'bold'), fill='#feca57')
-            self.high_score_hud = self.canvas.create_text(
-                self.width / 2, 21, text=high_text,
-                font=('Segoe UI', 12, 'bold'), fill='#c8d6e5')
-            self.lives_hud = self.canvas.create_text(
-                self.width - 80, 21, text=hearts,
-                font=('Segoe UI', 12, 'bold'), fill='#ff6b6b')
+        if self.hud_score is None:
+            self.hud_score = self.canvas.create_text(
+                110, 22, text=score_text,
+                font=('Segoe UI', 11, 'bold'), fill='#feca57')
+            self.hud_level = self.canvas.create_text(
+                self.width / 2, 22, text=level_text,
+                font=('Segoe UI', 11, 'bold'), fill='#48dbfb')
+            self.hud_lives = self.canvas.create_text(
+                self.width - 80, 22, text=hearts,
+                font=('Segoe UI', 11, 'bold'), fill='#ff6b6b')
         else:
-            self.canvas.itemconfig(self.score_hud, text=score_text)
-            self.canvas.itemconfig(self.high_score_hud, text=high_text)
-            self.canvas.itemconfig(self.lives_hud, text=hearts)
+            self.canvas.itemconfig(self.hud_score, text=score_text)
+            self.canvas.itemconfig(self.hud_level, text=level_text)
+            self.canvas.itemconfig(self.hud_lives, text=hearts)
 
     def start_game(self):
         self.canvas.unbind('<space>')
-        self.canvas.delete(self.text)
+        if self.text:
+            self.canvas.delete(self.text)
+            self.text = None
+        if self.subtext:
+            self.canvas.delete(self.subtext)
+            self.subtext = None
         self.paddle.ball = None
+        self.is_running = True
         self.game_loop()
 
+    def toggle_pause(self):
+        """Fitur jeda (pause) dan melanjutkan permainan."""
+        if not self.is_running:
+            return
+        self.paused = not self.paused
+        if self.paused:
+            self.pause_text = self.draw_text(self.width / 2, 215, 'PAUSED', size='28', fill='#ffd32a')
+            self.pause_sub = self.draw_text(self.width / 2, 255, 'Press [P] to Resume', size='13', fill='#ffffff')
+        else:
+            if self.pause_text:
+                self.canvas.delete(self.pause_text)
+                self.pause_text = None
+            if self.pause_sub:
+                self.canvas.delete(self.pause_sub)
+                self.pause_sub = None
+
+    def restart_game(self):
+        """Reset total permainan kembali ke kondisi awal (Level 1, Skor 0, Nyawa 3)."""
+        self.is_running = False
+        self.paused = False
+        if self.pause_text:
+            self.canvas.delete(self.pause_text)
+            self.pause_text = None
+        if self.pause_sub:
+            self.canvas.delete(self.pause_sub)
+            self.pause_sub = None
+
+        self.lives = 3
+        self.score = 0
+        self.level = 1
+        self.load_level(1)
+        self.setup_game()
+
     def game_loop(self):
+        if not self.is_running:
+            return
+        if self.paused:
+            self.after(100, self.game_loop)
+            return
+
         self.check_collisions()
         num_bricks = len(self.canvas.find_withtag('brick'))
         if num_bricks == 0:
-            self.ball.speed = None
-            self.draw_text(self.width / 2, 230, 'YOU WIN!', size='36', fill='#1dd1a1')
+            self.is_running = False
+            self.ball.speed = 0
+            if self.level == 1:
+                self.add_score(100)  # Bonus tamat Level 1
+                self.text = self.draw_text(self.width / 2, 215, 'LEVEL 1 CLEARED!', size='26', fill='#1dd1a1')
+                self.subtext = self.draw_text(self.width / 2, 255, 'Get ready for Level 2...', size='13', fill='#c8d6e5')
+                self.after(2000, self.start_level_2)
+            else:
+                self.text = self.draw_text(self.width / 2, 215, 'VICTORY! ALL LEVELS CLEARED!', size='26', fill='#1dd1a1')
+                self.subtext = self.draw_text(self.width / 2, 255,
+                                              f'Final Score: {self.score} | Press [R] to Play Again',
+                                              size='13', fill='#ffd32a')
         elif self.ball.get_position()[3] >= self.height:
-            self.ball.speed = None
+            self.is_running = False
             self.lives -= 1
             self.update_hud()
             if self.lives < 0:
-                self.draw_text(self.width / 2, 230, 'GAME OVER', size='36', fill='#ff6b6b')
+                self.text = self.draw_text(self.width / 2, 215, 'GAME OVER', size='32', fill='#ff6b6b')
+                self.subtext = self.draw_text(self.width / 2, 255,
+                                              f'Score: {self.score} | Press [R] to Restart',
+                                              size='13', fill='#c8d6e5')
             else:
                 self.after(1000, self.setup_game)
         else:
             self.ball.update()
             self.after(50, self.game_loop)
+
+    def start_level_2(self):
+        """Memulai Level 2 dengan kecepatan bola lebih lincah dan pola bata baru."""
+        if self.text:
+            self.canvas.delete(self.text)
+            self.text = None
+        if self.subtext:
+            self.canvas.delete(self.subtext)
+            self.subtext = None
+        self.level = 2
+        self.load_level(2)
+        self.setup_game()
 
     def check_collisions(self):
         ball_coords = self.ball.get_position()
